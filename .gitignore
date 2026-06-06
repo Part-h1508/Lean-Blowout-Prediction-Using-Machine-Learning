@@ -1,0 +1,16 @@
+# Confidential dataset
+lbo_prediction/data/*
+
+# Keep only dataset notice
+!lbo_prediction/data/README.txt
+
+# Generated outputs
+lbo_prediction/outputs/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Archives
+*.zip
