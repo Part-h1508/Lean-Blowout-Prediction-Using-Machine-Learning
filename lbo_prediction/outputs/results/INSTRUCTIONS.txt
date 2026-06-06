@@ -1,0 +1,44 @@
+================================================================================
+LBO PREDICTION PIPELINE - INSTRUCTIONS
+================================================================================
+
+NEXT STEPS:
+
+1. REVIEW THE TIMELINE PLOT:
+   Open: outputs/plots/timeline.png
+   - This is your paper's key figure
+   - Shows predicted LBO probability rising BEFORE the actual event
+   - Demonstrates the predictive power of the model
+
+2. IF PREDICTION IS TOO EARLY/LATE:
+   - Open: config.py
+   - Adjust: WARNING_WINDOW parameter
+   - Increase WARNING_WINDOW to warn earlier
+   - Decrease WARNING_WINDOW to warn later
+   - Re-run: python pipeline.py
+
+3. CHECK OTHER PLOTS:
+   - confusion_matrix.png: Model accuracy breakdown
+   - roc_curve.png: Model discrimination ability (AUC-ROC)
+   - feature_importance.png: Top sensors driving LBO prediction
+   - precision_recall_curve.png: Precision vs Recall tradeoff
+
+4. REVIEW METRICS:
+   Open: outputs/results/classification_report.txt
+   - Precision: Of predicted LBO events, how many were correct?
+   - Recall: Of actual LBO events, how many were caught?
+   - F1: Harmonic mean of precision and recall
+   - AUC-ROC: Area under the ROC curve (0.5 = random, 1.0 = perfect)
+
+5. USE THE MODEL FOR OTHER EVENTS:
+   The same pipeline structure works for RBO and TAI
+   - Create new config files: config_rbo.py, config_tai.py
+   - Set different LBO_ROW_INDEX values for each event
+   - Or modify pipeline.py to accept event type as parameter
+
+6. DEPLOYMENT:
+   - Saved model: outputs/models/lbo_model.pkl
+   - Saved scaler: outputs/models/scaler.pkl
+   - Load in production to make real-time predictions
+
+================================================================================

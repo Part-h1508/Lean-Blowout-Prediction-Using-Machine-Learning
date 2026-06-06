@@ -1,0 +1,48 @@
+================================================================================
+LBO PREDICTION PIPELINE - RESULTS REPORT
+================================================================================
+
+DATA SUMMARY:
+  Total samples: 400000
+  Total features (after engineering): 30
+  LBO row index: 399571
+  Warning window: 4000 rows
+  Total LBO samples: 446760
+
+TRAIN/TEST SPLIT:
+  Training samples: 360000
+  Test samples: 40000
+  Training LBO samples: 405852
+  Test LBO samples: 40908
+
+MODEL PERFORMANCE:
+  Test MAE: 0.0026
+  Test RMSE: 0.0037
+  Test R²: -69263310502339380066123776.0000
+  Mean Absolute Percentage Error: 0.0025
+
+  Test MAPE: 0.0025
+
+PREDICTION SAMPLES:
+  First 10 predictions vs actual:
+    Actual: 1.0227, Predicted: 1.0028
+    Actual: 1.0227, Predicted: 1.0037
+    Actual: 1.0227, Predicted: 1.0036
+    Actual: 1.0227, Predicted: 1.0036
+    Actual: 1.0227, Predicted: 1.0034
+    Actual: 1.0227, Predicted: 1.0041
+    Actual: 1.0227, Predicted: 1.0040
+    Actual: 1.0227, Predicted: 1.0040
+    Actual: 1.0227, Predicted: 1.0040
+    Actual: 1.0227, Predicted: 1.0040
+
+================================================================================
+FILES GENERATED:
+  Models:
+    - outputs/models/lbo_model.pkl
+    - outputs/models/scaler.pkl
+  Plots:
+    - outputs/plots/actual_vs_predicted.png
+    - outputs/plots/residuals.png
+    - outputs/plots/feature_importance.png
+    - outputs/results/classification_report.txt
