@@ -1,16 +1,23 @@
-# Confidential dataset
-lbo_prediction/data/*
-
-# Keep only dataset notice
-!lbo_prediction/data/README.txt
-
-# Generated outputs
-lbo_prediction/outputs/
-
 # Python
 __pycache__/
 *.pyc
 .venv/
 
+# Confidential dataset
+lbo_prediction/data/*
+!lbo_prediction/data/README.txt
+
+# Generated outputs
+lbo_prediction/outputs/
+
+# Old experiments
+lbo_prediction/archive_old/
+
+# Trained models
+*.pkl
+
 # Archives
 *.zip
+
+# VS Code
+.vscode/

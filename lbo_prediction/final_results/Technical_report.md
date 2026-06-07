@@ -4,7 +4,7 @@
 
 Lean Blowout (LBO) is a critical combustion instability that occurs when the fuel-air mixture becomes too lean to sustain stable combustion. Early prediction of LBO can improve combustor safety, efficiency, and operational reliability.
 
-This project develops a machine learning framework for predicting combustion stability using pressure sensor signals collected under multiple operating conditions. Time-domain and physics-inspired features were extracted from the sensor data and used to train an XGBoost regression model. The model predicts the normalized equivalence ratio (Phi/Phi_LBO) and classifies operating conditions into Safe, Warning, and Critical states.
+This project develops a machine learning framework for predicting combustion stability using pressure sensor signals collected under multiple operating conditions. Time-domain and physics-inspired features were extracted from the sensor data and used to train an XGBoost regression model. The model predicts the normalized equivalence ratio (Φ/ΦLBO) and classifies operating conditions into Safe, Warning, and Critical states.
 
 The final model achieved an average prediction error of 2.44% and correctly classified all operating conditions into their respective warning states.
 
@@ -81,7 +81,7 @@ XGBoost Regressor
 
 Target Variable:
 
-Phi/Phi_LBO
+Φ/ΦLBO
 
 The model was trained to estimate the normalized distance from lean blowout.
 
@@ -121,9 +121,9 @@ Three operating regions were defined:
 
 | State | Condition |
 |---------|---------|
-| Safe | /Phi_LBO > 1.05 |
-| Warning | 1.025 < Phi/Phi_LBO <= 1.05 |
-| Critical | Phi/Phi_LBO <= 1.025 |
+| Safe | Φ/ΦLBO > 1.05 |
+| Warning | 1.025 < Φ/ΦLBO <= 1.05 |
+| Critical | Φ/ΦLBO <= 1.025 |
 
 Classification Results:
 
