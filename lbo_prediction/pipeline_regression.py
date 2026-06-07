@@ -5,6 +5,13 @@ Complete time-series event prediction system for combustion sensor data
 
 import os
 import sys
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR_IMPORT = os.path.join(CURRENT_DIR, "data")
+
+if DATA_DIR_IMPORT not in sys.path:
+    sys.path.insert(0, DATA_DIR_IMPORT)
+
+from private_config import PHI_RATIO
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -19,7 +26,7 @@ from xgboost import XGBRegressor
 from imblearn.over_sampling import SMOTE
 import pickle
 import warnings
-from lbo_prediction.archive_old.config import (
+from config import (
     DATA_DIR, OUTPUT_DIR, MODELS_DIR, PLOTS_DIR, RESULTS_DIR,
     TIME_COL, LBO_ROW_INDEX, COLS_TO_DROP, WARNING_WINDOW,
     TEST_SIZE, RANDOM_STATE, SMOTE_K_NEIGHBORS, XGBOOST_PARAMS,
@@ -28,19 +35,6 @@ from lbo_prediction.archive_old.config import (
 from scipy.signal import welch  
 
 warnings.filterwarnings('ignore')
-
-PHI_RATIO = {
-    "65": 1.3846,
-    "70": 1.2857,
-    "75": 1.2000,
-    "80": 1.1250,
-    "85": 1.0588,
-    "86": 1.0465,
-    "87": 1.0345,
-    "88": 1.0227,
-    "89": 1.0112,
-    "90": 1.0000
-}
 
 # Change to script directory so relative paths work
 script_dir = os.path.dirname(os.path.abspath(__file__))
