@@ -3,6 +3,15 @@ import sys
 import pandas as pd
 import numpy as np
 
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR_IMPORT = os.path.join(CURRENT_DIR, "data")
+
+if DATA_DIR_IMPORT not in sys.path:
+    sys.path.insert(0, DATA_DIR_IMPORT)
+
+
+from private_config import PHI_RATIO
+
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_absolute_error
 from xgboost import XGBRegressor
@@ -15,19 +24,6 @@ DATA_DIR = os.path.join(
     os.path.dirname(__file__),
     "data"
 )
-
-PHI_RATIO = {
-    "65": 1.3846,
-    "70": 1.2857,
-    "75": 1.2000,
-    "80": 1.1250,
-    "85": 1.0588,
-    "86": 1.0465,
-    "87": 1.0345,
-    "88": 1.0227,
-    "89": 1.0112,
-    "90": 1.0000
-}
 
 XGBOOST_PARAMS = {
     "n_estimators": 200,
