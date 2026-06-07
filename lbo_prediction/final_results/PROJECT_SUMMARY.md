@@ -8,22 +8,8 @@ Predict combustion stability and lean blowout proximity using pressure sensor si
 
 ## Dataset
 
-Operating Conditions:
-
-65 SPLM
-70 SPLM
-75 SPLM
-80 SPLM
-85 SPLM
-86 SPLM
-87 SPLM
-88 SPLM
-89 SPLM
-90 SPLM
-
-Rows per condition: 40,000
-
-Total samples: 400,000
+10 operating conditions spanning stable to near-blowout regimes.
+Multiple high-frequency pressure measurements were collected under proprietary operating conditions.
 
 ---
 
