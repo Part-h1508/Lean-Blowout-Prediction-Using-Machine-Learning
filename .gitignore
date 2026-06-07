@@ -3,12 +3,13 @@ __pycache__/
 *.pyc
 .venv/
 
-# Confidential dataset
-lbo_prediction/data/*
-!lbo_prediction/data/README.txt
+# outputs
+lbo_prediction/outputs/*
+!lbo_prediction/outputs/README.md
 
-# Generated outputs
-lbo_prediction/outputs/
+# training datasets
+lbo_prediction/data/*
+!lbo_prediction/data/DATA_NOTICE.md
 
 # Old experiments
 lbo_prediction/archive_old/
@@ -21,3 +22,6 @@ lbo_prediction/archive_old/
 
 # VS Code
 .vscode/
+
+# photos
+lbo_prediction/final_results/actual_vs_predicted.png
