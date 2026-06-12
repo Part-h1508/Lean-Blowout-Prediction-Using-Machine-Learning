@@ -54,7 +54,6 @@ Several features were extracted from the raw sensor signals.
 ### NRMS
 
 Normalized Root Mean Square:
-
 NRMS = Rolling Standard Deviation / Rolling Mean
 
 Used as a combustion instability indicator.
