@@ -1,7 +1,4 @@
-"""
-LBO (Lean Blowout) Prediction Pipeline
-Complete time-series event prediction system for combustion sensor data
-"""
+"""LBO prediction pipeline."""
 
 import os
 import sys
@@ -36,11 +33,11 @@ from scipy.signal import welch
 
 warnings.filterwarnings('ignore')
 
-# Change to script directory so relative paths work
+#changing to the script folder so relative paths work
 script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
 
-# Create output directories
+#making output folders
 for directory in [MODELS_DIR, PLOTS_DIR, RESULTS_DIR]:
     os.makedirs(directory, exist_ok=True)
 
@@ -48,24 +45,22 @@ print("=" * 80)
 print("LBO PREDICTION PIPELINE")
 print("=" * 80)
 
-# ============================================================================
-# SECTION A: DATA LOADING AND VALIDATION
-# ============================================================================
+#loading and checking the data
 print("\n[A] Loading and validating data...")
 
 def load_data():
     """Load sensor data files from the data directory."""
     try:
-        # Only load numeric-named xlsx files (65.xlsx through 90.xlsx)
+        #loading files with numeric names
         all_files = [f for f in os.listdir(DATA_DIR) if f.endswith('.xlsx')]
         sensor_files = []
         for f in all_files:
             try:
-                # Try to parse filename as number (e.g., "25.xlsx" -> 25)
+                #checking whether the filename is a number
                 float(f.replace('.xlsx', ''))
                 sensor_files.append(f)
             except ValueError:
-                # Skip non-numeric files 
+                #skipping other files
                 continue
         
         sensor_files.sort(key=lambda x: float(x.replace('.xlsx', '')))
@@ -79,10 +74,10 @@ def load_data():
         for file in sensor_files:
             filepath = os.path.join(DATA_DIR, file)
             try:
-                # Read Excel file without header (all rows are data)
+                #reading the file without a header
                 df = pd.read_excel(filepath, header=None)
 
-                # Store source file
+                #keeping the source filename
                 df["source_file"] = file.replace(".xlsx", "")
 
                 print(f"   Loaded: {file} ({len(df)} rows, {len(df.columns)-1} columns)")
@@ -94,7 +89,7 @@ def load_data():
         if not dataframes:
             raise ValueError("No dataframes could be loaded successfully")
         
-        # Concatenate all dataframes
+        #joining the dataframes
         df = pd.concat(dataframes, ignore_index=True)
         return df
     
@@ -106,33 +101,31 @@ df = load_data()
 print(f"   Total shape: {df.shape}")
 print(f"   Columns: {list(df.columns)[:10]}..." if len(df.columns) > 10 else f"   Columns: {list(df.columns)}")
 
-# ============================================================================
-# SECTION B: DATA PREPROCESSING
-# ============================================================================
+#preparing the data
 print("\n[B] Preprocessing data...")
 
 def preprocess_data(df):
     """Clean and prepare data."""
     try:
-        # Drop specified columns
+        #dropping selected columns
         cols_to_drop_valid = [col for col in COLS_TO_DROP if col in df.columns]
         if cols_to_drop_valid:
             print(f"   Dropping columns: {cols_to_drop_valid}")
             df = df.drop(columns=cols_to_drop_valid)
         
-        # Drop TIME_COL if specified and present
+        #dropping the time column if it is set
         if TIME_COL and TIME_COL in df.columns and TIME_COL != "":
             print(f"   Dropping TIME_COL: {TIME_COL}")
             df = df.drop(columns=[TIME_COL])
         
-        # Remove rows with NaN
+        #removing rows with missing values
         initial_rows = len(df)
         df = df.dropna()
         rows_dropped = initial_rows - len(df)
         if rows_dropped > 0:
             print(f"   Dropped {rows_dropped} rows with NaN values")
         
-        # Ensure all columns are numeric
+        #converting the columns to numbers
         df = df.apply(pd.to_numeric, errors='coerce')
         df = df.dropna()
         
@@ -145,14 +138,12 @@ def preprocess_data(df):
 
 df = preprocess_data(df)
 source_files = df["source_file"].copy()
-# Normalize source file identifiers to string keys (match PHI_RATIO keys)
+#making the source names match the PHI_RATIO keys
 source_files = source_files.astype(str).str.strip()
 df = df.drop(columns=["source_file"])
 
 """
-# ============================================================================
-# SECTION C: VALIDATE LBO_ROW_INDEX
-# ============================================================================
+#checking the LBO row index
 print("\n[C] Validating LBO_ROW_INDEX...")
 
 if LBO_ROW_INDEX is None:
@@ -172,9 +163,7 @@ except Exception as e:
     sys.exit(1)
 """
 
-# ============================================================================
-# SECTION D: FEATURE ENGINEERING
-# ============================================================================
+#creating features
 print("\n[D] Feature engineering...")
 
 def create_features(df):
@@ -182,13 +171,13 @@ def create_features(df):
     try:
         df_features = df.copy()
         
-        # Rolling statistics (window of 10, 20, 50 rows)
+        #rolling statistics
         for window in [50, 100, 500]:
             for col in df.columns:
                 df_features[f'{col}_roll_mean_{window}'] = df[col].rolling(window=window, min_periods=1).mean()
                 df_features[f'{col}_roll_std_{window}'] = df[col].rolling(window=window, min_periods=1).std()
 
-        # NRMS features
+        #NRMS features
         for col in df.columns:
 
             rolling_mean = df[col].rolling(window=500, min_periods=1).mean()
@@ -196,23 +185,19 @@ def create_features(df):
 
             df_features[f'{col}_nrms'] = rolling_std / (rolling_mean.abs() + 1e-8)
         
-        # Lagged features (previous 1, 2, 5 rows)
+        #lagged features
         for lag in [1, 2, 5]:
             for col in df.columns:
                 df_features[f'{col}_lag_{lag}'] = df[col].shift(lag)
         
-        # Differences (rate of change)
+        #differences between rows
         for col in df.columns:
             df_features[f'{col}_diff'] = df[col].diff()
-        # ============================================================
-        # PHYSICS FEATURES
-        # ============================================================
+        #physics features
 
         for col in df.columns:
 
-            # --------------------------
-            # Theta
-            # --------------------------
+            #theta feature
 
             rolling_mean = df[col].rolling(
                 window=500,
@@ -231,9 +216,7 @@ def create_features(df):
             df_features[f'{col}_theta'] = theta
 
 
-            # --------------------------
-            # Autocorrelation
-            # --------------------------
+            #autocorrelation feature
 
             df_features[f'{col}_autocorr_1'] = (
                 df[col]
@@ -242,9 +225,7 @@ def create_features(df):
             )
 
 
-            # --------------------------
-            # PSD Energy Proxy
-            # --------------------------
+            #PSD proxy
 
             df_features[f'{col}_psd_proxy'] = (
                 df[col]
@@ -253,7 +234,7 @@ def create_features(df):
                 ** 2
             )
         
-        # Fill NaN values created by rolling/lagging
+        #filling missing values from rolling and lagged features
         df_features = df_features.bfill().ffill().fillna(0)
         
         print(f"   Created {len(df_features.columns)} features from {len(df.columns)} original columns")
@@ -269,15 +250,13 @@ def create_features(df):
 
 df_features = create_features(df)
 
-# Convert all column names to strings for sklearn compatibility
+#converting column names to strings for sklearn
 df_features.columns = df_features.columns.astype(str)
-# ============================================================================
-# SECTION E: CREATE REGRESSION TARGET
-# ============================================================================
+#creating the target values
 print("\n[E] Creating Phi/Phi_LBO targets...")
 
 try:
-    # Convert source_files to strings to match PHI_RATIO keys
+    #matching source names to PHI_RATIO keys
     source_files_str = source_files.astype(str)
     
     y = source_files_str.map(PHI_RATIO)
@@ -294,12 +273,10 @@ except Exception as e:
     print(f"   ERROR creating targets: {e}")
     sys.exit(1)
 
-# ============================================================================
-# SECTION F: TRAIN/TEST SPLIT (FILE-BASED)
-# ============================================================================
+#splitting by file
 print("\n[F] File-based train/test split...")
 
-test_file = "88" # important as this can be used in leave one out approach
+test_file = "88" #this can also be used for leave-one-file-out testing
 
 train_mask = source_files != test_file
 test_mask = source_files == test_file
@@ -319,9 +296,7 @@ print(f"   Test set: {len(X_test)} rows")
 print(f"   Train target range: {y_train.min():.4f} to {y_train.max():.4f}")
 print(f"   Test target value: {y_test.iloc[0]:.4f}")
 
-# ============================================================================
-# SECTION G: FEATURE SCALING
-# ============================================================================
+#scaling the features
 print("\n[G] Scaling features...")
 
 def scale_features(X_train, X_test):
@@ -340,20 +315,16 @@ def scale_features(X_train, X_test):
 
 X_train_scaled, X_test_scaled, scaler = scale_features(X_train, X_test)
 
-# ============================================================================
-# SECTION H: CLASS BALANCING WITH SMOTE
-# ============================================================================
+#preparing the training data
 print("\n[H] Preparing training data for regression...")
 
-# For regression, SMOTE is not applicable (no class balancing needed)
+#SMOTE is not used for this regression task
 print("   Regression task - skipping SMOTE")
 X_train_balanced = X_train_scaled
 y_train_balanced = y_train
 smote = None
 
-# ============================================================================
-# SECTION I: MODEL TRAINING
-# ============================================================================
+#training the model
 print("\n[I] Training XGBoost model...")
 
 def train_model(X_train, y_train):
@@ -373,19 +344,17 @@ def train_model(X_train, y_train):
 
 model = train_model(X_train_balanced, y_train_balanced)
 
-# ============================================================================
-# SECTION J: EVALUATION AND METRICS
-# ============================================================================
+#checking model performance
 print("\n[J] Evaluating model...")
 
 def evaluate_model(model, X_train, X_test, y_train, y_test):
     """Evaluate regression model on train and test sets."""
     try:
-        # Predictions
+        #making predictions
         y_train_pred = model.predict(X_train)
         y_test_pred = model.predict(X_test)
         
-        # Regression Metrics
+        #calculating regression metrics
         train_mae = mean_absolute_error(y_train, y_train_pred)
         train_rmse = np.sqrt(mean_squared_error(y_train, y_train_pred))
         train_r2 = r2_score(y_train, y_train_pred)
@@ -409,9 +378,7 @@ y_train_pred, y_test_pred, test_mae, test_rmse, test_r2 = evaluate_model(
     model, X_train_scaled, X_test_scaled, y_train, y_test
 )
 
-# ============================================================================
-# SAVING MODEL AND PREPROCESSING OBJECTS
-# ============================================================================
+#saving the model and scaler
 print("\n[K] Saving model and preprocessing objects...")
 
 try:
@@ -427,15 +394,13 @@ try:
 except Exception as e:
     print(f"   ERROR saving model: {e}")
 
-# ============================================================================
-# PLOTTING
-# ============================================================================
+#making plots
 print("\n[L] Generating plots...")
 
 plt.style.use('seaborn-v0_8-darkgrid')
 sns.set_palette("husl")
 
-# Plot 1: Actual vs Predicted
+#actual values and predictions
 try:
     print("   Generating: Actual vs Predicted plot...")
     fig, ax = plt.subplots(figsize=PLOT_FIGSIZE, dpi=PLOT_DPI)
@@ -458,7 +423,7 @@ try:
 except Exception as e:
     print(f"      ERROR: {e}")
 
-# Plot 2: Residuals
+#residuals
 try:
     print("   Generating: Residuals plot...")
     fig, ax = plt.subplots(figsize=PLOT_FIGSIZE, dpi=PLOT_DPI)
@@ -479,7 +444,7 @@ try:
 except Exception as e:
     print(f"      ERROR: {e}")
 
-# Plot 3: Feature Importance
+#feature importance
 try:
     print("   Generating: Feature importance...")
     fig, ax = plt.subplots(figsize=(10, 6), dpi=PLOT_DPI)
@@ -509,11 +474,9 @@ except Exception as e:
 except Exception as e:
     print(f"      ERROR: {e}")
 
-# No precision-recall curve for regression - removed classification plot
+#there is no precision-recall plot for regression
 
-# ============================================================================
-# GENERATING RESULTS REPORT
-# ============================================================================
+#writing the results report
 print("\n[M] Generating results report...")
 
 try:
@@ -564,9 +527,7 @@ try:
 except Exception as e:
     print(f"   ERROR generating report: {e}")
 
-# ============================================================================
-# FINAL INSTRUCTIONS
-# ============================================================================
+#writing the instructions file
 print("\n[N] Creating instructions file...")
 
 try:
@@ -621,9 +582,7 @@ try:
 except Exception as e:
     print(f"   ERROR creating instructions: {e}")
 
-# ============================================================================
-# PIPELINE COMPLETE
-# ============================================================================
+#pipeline complete
 print("\n" + "=" * 80)
 print("PIPELINE COMPLETE!")
 print("=" * 80)

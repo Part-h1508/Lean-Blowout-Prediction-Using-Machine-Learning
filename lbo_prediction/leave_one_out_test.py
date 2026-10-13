@@ -16,9 +16,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_absolute_error
 from xgboost import XGBRegressor
 
-# ============================================================================
-# CONFIG
-# ============================================================================
+#config
 
 DATA_DIR = os.path.join(
     os.path.dirname(__file__),
@@ -35,14 +33,12 @@ XGBOOST_PARAMS = {
     "objective": "reg:squarederror"
 }
 
-# ============================================================================
-# SECTION A: DATA LOADING AND VALIDATION
-# ============================================================================
+#loading and checking the data
 
 print("\n[A] Loading and validating data...")
 
 def load_data():
-    """Load sensor data files from the data directory."""
+    """Load the sensor files from the data folder."""
 
     try:
 
@@ -112,9 +108,7 @@ df = load_data()
 print(f"   Total shape: {df.shape}")
 print(f"   Columns: {list(df.columns)}")
 
-# ============================================================================
-# PREPROCESSING
-# ============================================================================
+#preparing the data
 
 print("\n[B] Preprocessing data...")
 
@@ -128,9 +122,7 @@ df = df.dropna()
 
 print(f"   Shape after preprocessing: {df.shape}")
 
-# ============================================================================
-# FEATURE ENGINEERING
-# ============================================================================
+#creating features
 
 print("\n[C] Feature engineering...")
 
@@ -184,15 +176,11 @@ for col in df.columns:
     df_features[f"{col}_diff"] = (
         df[col].diff()
     )
-# ============================================================
-# PHYSICS FEATURES
-# ============================================================
+#physics features
 
 for col in df.columns:
 
-    # --------------------------
-    # Theta
-    # --------------------------
+    #theta feature
 
     rolling_mean = (
         df[col]
@@ -210,9 +198,7 @@ for col in df.columns:
 
     df_features[f"{col}_theta"] = theta
 
-    # --------------------------
-    # Autocorrelation
-    # --------------------------
+    #autocorrelation feature
 
     df_features[f"{col}_autocorr_1"] = (
         df[col]
@@ -220,9 +206,7 @@ for col in df.columns:
         .corr(df[col].shift(1))
     )
 
-    # --------------------------
-    # PSD Proxy
-    # --------------------------
+    #PSD proxy
 
     df_features[f"{col}_psd_proxy"] = (
         df[col]
@@ -244,9 +228,7 @@ df_features.columns = (
 
 print(f"   Feature shape: {df_features.shape}")
 
-# ============================================================================
-# TARGETS
-# ============================================================================
+#creating target values
 
 print("\n[D] Creating targets...")
 
@@ -256,9 +238,7 @@ print(
     f"   Target range: "
     f"{y.min():.4f} to {y.max():.4f}"
 )
-# ============================================================================
-# LEAVE ONE FILE OUT TEST
-# ============================================================================
+#testing one file at a time
 
 print("\n[E] Running leave-one-file-out validation...")
 
@@ -329,9 +309,7 @@ for test_file in PHI_RATIO.keys():
         mae,
         percent_error
     ])
-# ============================================================================
-# RESULTS TABLE
-# ============================================================================
+#showing the results
 
 print("\n[F] Results")
 
@@ -368,9 +346,7 @@ print("leave_one_out_results.csv")
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import matplotlib.pyplot as plt
 
-# ============================================================================
-# CONFUSION MATRIX
-# ============================================================================
+#making a confusion matrix
 
 actual_states = results_df["Actual_State"]
 predicted_states = results_df["Predicted_State"]
