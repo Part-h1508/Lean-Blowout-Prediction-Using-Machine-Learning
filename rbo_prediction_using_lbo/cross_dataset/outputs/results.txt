@@ -1,11 +1,35 @@
 LBO-to-RBO regression results
+Targets: LBO = PHI_RATIO - 1; RBO = 1 - (filename value / RBO_LIMIT)
 Target: distance from blowout limit (0 at limit; positive on stable side)
 Target equivalence: confirmed in config.py
 Signal features: normalized by a causal 500-sample running mean
+Feature calculations restart independently for each file
 Sampling interval check: passed; time values withheld
-Limitations: row-pooled metrics; feature windows are sample counts; no resampling.
+Pooled metrics are row-weighted; macro metrics weight each file equally.
+Per-file R2 is n/a because each file has a constant target.
+Feature windows are sample counts; no resampling is applied.
 
-Train LBO, test RBO:
-MAE: 0.119480
-RMSE: 0.137989
-R2: -3.812876
+Pooled row-weighted metrics:
+Model MAE: 0.119480
+Model RMSE: 0.137989
+Model R2: -3.812876
+LBO mean-target baseline (target=0.116900) MAE: 0.060351
+LBO mean-target baseline RMSE: 0.069211
+LBO mean-target baseline R2: -0.210773
+
+Equal-file macro MAE/RMSE:
+Model: 0.119480, 0.120364
+LBO mean-target baseline: 0.060351, 0.060351
+
+Per-file metrics (R2 is n/a):
+5.0.txt (40000 rows, target=0.206349): model MAE=0.243377, RMSE=0.243430; baseline MAE=0.089449, RMSE=0.089449
+5.2.txt (40000 rows, target=0.174603): model MAE=0.210286, RMSE=0.210387; baseline MAE=0.057703, RMSE=0.057703
+5.4.txt (40000 rows, target=0.142857): model MAE=0.179391, RMSE=0.179492; baseline MAE=0.025957, RMSE=0.025957
+5.6.txt (40000 rows, target=0.111111): model MAE=0.148410, RMSE=0.148519; baseline MAE=0.005789, RMSE=0.005789
+5.7.txt (40000 rows, target=0.095238): model MAE=0.132152, RMSE=0.132270; baseline MAE=0.021662, RMSE=0.021662
+5.8.txt (40000 rows, target=0.079365): model MAE=0.114341, RMSE=0.114600; baseline MAE=0.037535, RMSE=0.037535
+5.9.txt (40000 rows, target=0.063492): model MAE=0.097255, RMSE=0.097628; baseline MAE=0.053408, RMSE=0.053408
+6.0.txt (40000 rows, target=0.047619): model MAE=0.076944, RMSE=0.077679; baseline MAE=0.069281, RMSE=0.069281
+6.1.txt (40000 rows, target=0.031746): model MAE=0.057768, RMSE=0.059195; baseline MAE=0.085154, RMSE=0.085154
+6.2.txt (40000 rows, target=0.015873): model MAE=0.034831, RMSE=0.037798; baseline MAE=0.101027, RMSE=0.101027
+6.3.txt (40000 rows, target=0.000000): model MAE=0.019525, RMSE=0.023001; baseline MAE=0.116900, RMSE=0.116900

@@ -21,6 +21,15 @@ class Run:
     time: np.ndarray
     signal: np.ndarray
     target: float
+    name: str = ""
+
+
+def lbo_target_from_ratio(phi_ratio):
+    return float(phi_ratio) - 1.0
+
+
+def rbo_target_from_ratio(phi_ratio, limit):
+    return 1.0 - float(phi_ratio) / limit
 
 
 def load_lbo_runs():
@@ -43,7 +52,8 @@ def load_lbo_runs():
         runs.append(Run(
             time=data.iloc[:, 0].to_numpy(dtype=float),
             signal=data.iloc[:, 1].to_numpy(dtype=float),
-            target=targets[path.stem] - 1.0
+            target=lbo_target_from_ratio(targets[path.stem]),
+            name=path.name
         ))
     return runs
 
@@ -101,7 +111,8 @@ def load_rbo_runs(data_dir=None):
         runs.append(Run(
             time=data[:, 0],
             signal=data[:, 1],
-            target=1.0 - float(path.stem) / config.RBO_LIMIT
+            target=rbo_target_from_ratio(path.stem, config.RBO_LIMIT),
+            name=path.name
         ))
     return runs
 
@@ -174,6 +185,15 @@ def make_dataset(runs):
     return features, targets
 
 
+def regression_metrics(y_true, predictions):
+    score = r2_score(y_true, predictions) if np.ptp(y_true) > 0 else np.nan
+    return {
+        "mae": mean_absolute_error(y_true, predictions),
+        "rmse": np.sqrt(mean_squared_error(y_true, predictions)),
+        "r2": score
+    }
+
+
 def evaluate(train_runs, test_runs):
     X_train, y_train = make_dataset(train_runs)
     X_test, y_test = make_dataset(test_runs)
@@ -186,11 +206,33 @@ def evaluate(train_runs, test_runs):
     model = XGBRegressor(**config.XGBOOST_PARAMS)
     model.fit(X_train, y_train)
     predictions = model.predict(X_test)
-    return (
-        mean_absolute_error(y_test, predictions),
-        np.sqrt(mean_squared_error(y_test, predictions)),
-        r2_score(y_test, predictions)
-    )
+    baseline_target = float(np.mean(y_train))
+    baseline_predictions = np.full(len(y_test), baseline_target)
+
+    per_file = []
+    start = 0
+    for index, run in enumerate(test_runs):
+        end = start + len(run.signal)
+        actual = y_test[start:end]
+        per_file.append({
+            "file": run.name or f"test_{index + 1}",
+            "rows": len(actual),
+            "target": run.target,
+            "model": regression_metrics(actual, predictions[start:end]),
+            "baseline": regression_metrics(actual, baseline_predictions[start:end])
+        })
+        start = end
+
+    return {
+        "model": regression_metrics(y_test, predictions),
+        "baseline": regression_metrics(y_test, baseline_predictions),
+        "baseline_target": baseline_target,
+        "per_file": per_file,
+        "macro_model_mae": float(np.mean([row["model"]["mae"] for row in per_file])),
+        "macro_model_rmse": float(np.mean([row["model"]["rmse"] for row in per_file])),
+        "macro_baseline_mae": float(np.mean([row["baseline"]["mae"] for row in per_file])),
+        "macro_baseline_rmse": float(np.mean([row["baseline"]["rmse"] for row in per_file]))
+    }
 
 
 def validate_config():
@@ -215,22 +257,46 @@ def main():
     rbo_runs = load_rbo_runs()
     check_sampling_compatibility(lbo_runs + rbo_runs)
 
-    lbo_to_rbo = evaluate(lbo_runs, rbo_runs)
+    results = evaluate(lbo_runs, rbo_runs)
+
+    def format_metrics(name, metrics):
+        return [
+            f"{name} MAE: {metrics['mae']:.6f}",
+            f"{name} RMSE: {metrics['rmse']:.6f}",
+            f"{name} R2: {metrics['r2']:.6f}"
+        ]
 
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     report = [
         "LBO-to-RBO regression results",
+        "Targets: LBO = PHI_RATIO - 1; RBO = 1 - (filename value / RBO_LIMIT)",
         "Target: distance from blowout limit (0 at limit; positive on stable side)",
         "Target equivalence: confirmed in config.py",
         "Signal features: normalized by a causal 500-sample running mean",
+        "Feature calculations restart independently for each file",
         "Sampling interval check: passed; time values withheld",
-        "Limitations: row-pooled metrics; feature windows are sample counts; no resampling.",
+        "Pooled metrics are row-weighted; macro metrics weight each file equally.",
+        "Per-file R2 is n/a because each file has a constant target.",
+        "Feature windows are sample counts; no resampling is applied.",
         "",
-        "Train LBO, test RBO:",
-        f"MAE: {lbo_to_rbo[0]:.6f}",
-        f"RMSE: {lbo_to_rbo[1]:.6f}",
-        f"R2: {lbo_to_rbo[2]:.6f}",
+        "Pooled row-weighted metrics:",
+        *format_metrics("Model", results["model"]),
+        f"LBO mean-target baseline (target={results['baseline_target']:.6f}) MAE: {results['baseline']['mae']:.6f}",
+        f"LBO mean-target baseline RMSE: {results['baseline']['rmse']:.6f}",
+        f"LBO mean-target baseline R2: {results['baseline']['r2']:.6f}",
+        "",
+        "Equal-file macro MAE/RMSE:",
+        f"Model: {results['macro_model_mae']:.6f}, {results['macro_model_rmse']:.6f}",
+        f"LBO mean-target baseline: {results['macro_baseline_mae']:.6f}, {results['macro_baseline_rmse']:.6f}",
+        "",
+        "Per-file metrics (R2 is n/a):"
     ]
+    for row in results["per_file"]:
+        report.append(
+            f"{row['file']} ({row['rows']} rows, target={row['target']:.6f}): "
+            f"model MAE={row['model']['mae']:.6f}, RMSE={row['model']['rmse']:.6f}; "
+            f"baseline MAE={row['baseline']['mae']:.6f}, RMSE={row['baseline']['rmse']:.6f}"
+        )
     report_path = config.OUTPUT_DIR / "results.txt"
     report_path.write_text("\n".join(report) + "\n", encoding="utf-8")
     print("LBO-to-RBO experiment completed.")

@@ -5,7 +5,6 @@ from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
-from unittest.mock import patch
 
 import pipeline
 
@@ -41,7 +40,7 @@ class CrossDatasetPipelineTests(unittest.TestCase):
 
         np.testing.assert_array_equal(runs[0].time, [0, 1, 2])
         np.testing.assert_array_equal(runs[0].signal, [10, 12, 14])
-        self.assertAlmostEqual(runs[0].target, 0.2)
+        self.assertAlmostEqual(runs[0].target, pipeline.lbo_target_from_ratio(1.2))
 
     def test_config_blocks_unconfirmed_real_run(self):
         with patch.object(pipeline.config, "LBO_SIGNAL_COLUMN", None):
@@ -49,8 +48,8 @@ class CrossDatasetPipelineTests(unittest.TestCase):
                 pipeline.validate_config()
 
     def test_lbo_and_rbo_targets_share_limit_distance_orientation(self):
-        lbo_margin = 1.2 - 1.0
-        rbo_margin = 1.0 - 0.8
+        lbo_margin = pipeline.lbo_target_from_ratio(1.2)
+        rbo_margin = pipeline.rbo_target_from_ratio(0.8, 1.0)
         self.assertAlmostEqual(lbo_margin, rbo_margin)
 
     def test_rbo_filename_target_is_limit_distance(self):
@@ -61,7 +60,7 @@ class CrossDatasetPipelineTests(unittest.TestCase):
 
         np.testing.assert_array_equal(runs[0].time, [0, 1, 2])
         np.testing.assert_array_equal(runs[0].signal, [10, 12, 14])
-        self.assertAlmostEqual(runs[0].target, 1.0 - 5.0 / 6.3)
+        self.assertAlmostEqual(runs[0].target, pipeline.rbo_target_from_ratio(5.0, 6.3))
 
     def test_malformed_rbo_file_fails_without_exposing_contents(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -79,6 +78,21 @@ class CrossDatasetPipelineTests(unittest.TestCase):
         pd.testing.assert_frame_equal(first.iloc[:len(prefix)], second.iloc[:len(prefix)])
         self.assertEqual(first.loc[0, "signal_lag_1"], 0)
         self.assertEqual(first.loc[0, "signal_autocorr_1"], 0)
+
+    def test_features_restart_independently_for_each_file(self):
+        first_signal = np.arange(1, 61, dtype=float)
+        second_signal = np.arange(101, 161, dtype=float)
+        runs = [
+            pipeline.Run(np.arange(60), first_signal, 0.2, "first.txt"),
+            pipeline.Run(np.arange(60), second_signal, 0.1, "second.txt")
+        ]
+
+        features, _ = pipeline.make_dataset(runs)
+        second_features = pipeline.create_features(second_signal)
+        pd.testing.assert_frame_equal(
+            features.iloc[len(first_signal):].reset_index(drop=True),
+            second_features
+        )
 
     def test_features_are_invariant_to_signal_scale(self):
         signal = np.arange(1, 101, dtype=float)
@@ -123,10 +137,13 @@ class CrossDatasetPipelineTests(unittest.TestCase):
         scaler = TestScaler()
         with patch.object(pipeline, "StandardScaler", return_value=scaler):
             with patch.object(pipeline, "XGBRegressor", return_value=TestModel()):
-                pipeline.evaluate(lbo_runs, rbo_runs)
+                results = pipeline.evaluate(lbo_runs, rbo_runs)
 
         self.assertEqual(scaler.fit_rows, 120)
         self.assertEqual(scaler.transform_rows, 110)
+        self.assertAlmostEqual(results["baseline_target"], 1.0)
+        self.assertEqual(results["model"]["mae"], results["baseline"]["mae"])
+        self.assertTrue(all(np.isnan(row["model"]["r2"]) for row in results["per_file"]))
 
 
 if __name__ == "__main__":
