@@ -89,9 +89,11 @@ class CrossDatasetPipelineTests(unittest.TestCase):
 
         features, _ = pipeline.make_dataset(runs)
         second_features = pipeline.create_features(second_signal)
-        pd.testing.assert_frame_equal(
-            features.iloc[len(first_signal):].reset_index(drop=True),
-            second_features
+        self.assertEqual(len(features), len(runs))
+        pd.testing.assert_series_equal(
+            features.iloc[1],
+            pipeline.summarize_features(second_features),
+            check_names=False
         )
 
     def test_features_are_invariant_to_signal_scale(self):
@@ -136,11 +138,11 @@ class CrossDatasetPipelineTests(unittest.TestCase):
         ]
         scaler = TestScaler()
         with patch.object(pipeline, "StandardScaler", return_value=scaler):
-            with patch.object(pipeline, "XGBRegressor", return_value=TestModel()):
+            with patch.object(pipeline, "Ridge", return_value=TestModel()):
                 results = pipeline.evaluate(lbo_runs, rbo_runs)
 
-        self.assertEqual(scaler.fit_rows, 120)
-        self.assertEqual(scaler.transform_rows, 110)
+            self.assertEqual(scaler.fit_rows, 2)
+            self.assertEqual(scaler.transform_rows, 2)
         self.assertAlmostEqual(results["baseline_target"], 1.0)
         self.assertEqual(results["model"]["mae"], results["baseline"]["mae"])
         self.assertTrue(all(np.isnan(row["model"]["r2"]) for row in results["per_file"]))

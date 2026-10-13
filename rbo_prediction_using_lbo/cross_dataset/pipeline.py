@@ -6,9 +6,9 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.preprocessing import StandardScaler
-from xgboost import XGBRegressor
 
 import config
 
@@ -177,12 +177,19 @@ def make_dataset(runs):
     names = feature_frames[0].columns.tolist()
     if any(frame.columns.tolist() != names for frame in feature_frames):
         raise ValueError("Feature columns do not match between files.")
-    features = pd.concat(feature_frames, ignore_index=True)
-    targets = np.concatenate([
-        np.full(len(run.signal), run.target, dtype=float)
-        for run in runs
-    ])
+    summaries = []
+    for frame in feature_frames:
+        summaries.append(summarize_features(frame))
+    features = pd.DataFrame(summaries).fillna(0)
+    targets = np.array([run.target for run in runs], dtype=float)
     return features, targets
+
+
+def summarize_features(features):
+    return pd.concat([
+        features.mean().add_suffix("_mean"),
+        features.std().fillna(0).add_suffix("_std")
+    ])
 
 
 def regression_metrics(y_true, predictions):
@@ -203,35 +210,49 @@ def evaluate(train_runs, test_runs):
     scaler = StandardScaler()
     X_train = scaler.fit_transform(X_train)
     X_test = scaler.transform(X_test)
-    model = XGBRegressor(**config.XGBOOST_PARAMS)
+    model = Ridge(alpha=config.RIDGE_ALPHA)
     model.fit(X_train, y_train)
     predictions = model.predict(X_test)
     baseline_target = float(np.mean(y_train))
     baseline_predictions = np.full(len(y_test), baseline_target)
 
     per_file = []
-    start = 0
     for index, run in enumerate(test_runs):
-        end = start + len(run.signal)
-        actual = y_test[start:end]
+        actual = y_test[index:index + 1]
         per_file.append({
             "file": run.name or f"test_{index + 1}",
-            "rows": len(actual),
+            "rows": len(run.signal),
             "target": run.target,
-            "model": regression_metrics(actual, predictions[start:end]),
-            "baseline": regression_metrics(actual, baseline_predictions[start:end])
+            "model": regression_metrics(actual, predictions[index:index + 1]),
+            "baseline": regression_metrics(actual, baseline_predictions[index:index + 1])
         })
-        start = end
 
     return {
         "model": regression_metrics(y_test, predictions),
         "baseline": regression_metrics(y_test, baseline_predictions),
         "baseline_target": baseline_target,
-        "per_file": per_file,
-        "macro_model_mae": float(np.mean([row["model"]["mae"] for row in per_file])),
-        "macro_model_rmse": float(np.mean([row["model"]["rmse"] for row in per_file])),
-        "macro_baseline_mae": float(np.mean([row["baseline"]["mae"] for row in per_file])),
-        "macro_baseline_rmse": float(np.mean([row["baseline"]["rmse"] for row in per_file]))
+        "per_file": per_file
+    }
+
+
+def validate_lbo_files(runs):
+    features, targets = make_dataset(runs)
+    predictions = np.empty(len(runs), dtype=float)
+    baseline_predictions = np.empty(len(runs), dtype=float)
+
+    for heldout in range(len(runs)):
+        train_mask = np.arange(len(runs)) != heldout
+        scaler = StandardScaler()
+        train_features = scaler.fit_transform(features.loc[train_mask])
+        test_features = scaler.transform(features.loc[[heldout]])
+        model = Ridge(alpha=config.RIDGE_ALPHA)
+        model.fit(train_features, targets[train_mask])
+        predictions[heldout] = model.predict(test_features)[0]
+        baseline_predictions[heldout] = targets[train_mask].mean()
+
+    return {
+        "model": regression_metrics(targets, predictions),
+        "baseline": regression_metrics(targets, baseline_predictions)
     }
 
 
@@ -257,6 +278,7 @@ def main():
     rbo_runs = load_rbo_runs()
     check_sampling_compatibility(lbo_runs + rbo_runs)
 
+    validation = validate_lbo_files(lbo_runs)
     results = evaluate(lbo_runs, rbo_runs)
 
     def format_metrics(name, metrics):
@@ -271,25 +293,27 @@ def main():
         "LBO-to-RBO regression results",
         "Targets: LBO = PHI_RATIO - 1; RBO = 1 - (filename value / RBO_LIMIT)",
         "Target: distance from blowout limit (0 at limit; positive on stable side)",
-        "Target equivalence: confirmed in config.py",
+        f"Model: Ridge regression (alpha={config.RIDGE_ALPHA})",
+        "One mean/std feature summary per file; files have equal training weight",
         "Signal features: normalized by a causal 500-sample running mean",
         "Feature calculations restart independently for each file",
         "Sampling interval check: passed; time values withheld",
-        "Pooled metrics are row-weighted; macro metrics weight each file equally.",
-        "Per-file R2 is n/a because each file has a constant target.",
+        "RBO metrics are exploratory; this holdout was previously examined.",
+        "Per-file R2 is n/a because each file contributes one test observation.",
         "Feature windows are sample counts; no resampling is applied.",
         "",
-        "Pooled row-weighted metrics:",
+        "LBO leave-one-file-out validation:",
+        "LBO leave-one-file-out score used for alpha selection; treat as optimistic.",
+        *format_metrics("Ridge", validation["model"]),
+        *format_metrics("LBO mean baseline", validation["baseline"]),
+        "",
+        "RBO equal-file metrics:",
         *format_metrics("Model", results["model"]),
         f"LBO mean-target baseline (target={results['baseline_target']:.6f}) MAE: {results['baseline']['mae']:.6f}",
         f"LBO mean-target baseline RMSE: {results['baseline']['rmse']:.6f}",
         f"LBO mean-target baseline R2: {results['baseline']['r2']:.6f}",
         "",
-        "Equal-file macro MAE/RMSE:",
-        f"Model: {results['macro_model_mae']:.6f}, {results['macro_model_rmse']:.6f}",
-        f"LBO mean-target baseline: {results['macro_baseline_mae']:.6f}, {results['macro_baseline_rmse']:.6f}",
-        "",
-        "Per-file metrics (R2 is n/a):"
+        "Per-RBO-file metrics (R2 is n/a):"
     ]
     for row in results["per_file"]:
         report.append(

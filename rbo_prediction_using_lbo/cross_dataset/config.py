@@ -18,12 +18,4 @@ SAMPLING_INTERVAL_TOLERANCE = 0.05
 
 ROLLING_WINDOWS = [50, 100, 500]
 LAGS = [1, 2, 5]
-XGBOOST_PARAMS = {
-    "n_estimators": 200,
-    "max_depth": 6,
-    "learning_rate": 0.1,
-    "subsample": 0.8,
-    "colsample_bytree": 0.8,
-    "random_state": 42,
-    "objective": "reg:squarederror"
-}
+RIDGE_ALPHA = 0.1
