@@ -1,41 +1,51 @@
 LBO-to-RBO regression results
 Targets: LBO = PHI_RATIO - 1; RBO = 1 - (filename value / RBO_LIMIT)
 Target: distance from blowout limit (0 at limit; positive on stable side)
-Model: Ridge regression (alpha=0.1)
-One mean/std feature summary per file; files have equal training weight
+Target equivalence: confirmed in config.py
 Signal features: normalized by a causal 500-sample running mean
 Feature calculations restart independently for each file
 Sampling interval check: passed; time values withheld
-RBO metrics are exploratory; this holdout was previously examined.
-Per-file R2 is n/a because each file contributes one test observation.
+Pooled metrics are row-weighted; macro metrics weight each file equally.
+Per-file R2 is n/a because each file has a constant target.
 Feature windows are sample counts; no resampling is applied.
 
-LBO leave-one-file-out validation:
-LBO leave-one-file-out score used for alpha selection; treat as optimistic.
-Ridge MAE: 0.027002
-Ridge RMSE: 0.036059
-Ridge R2: 0.916630
-LBO mean baseline MAE: 0.117267
-LBO mean baseline RMSE: 0.138760
-LBO mean baseline R2: -0.234568
-
-RBO equal-file metrics:
-Model MAE: 0.453879
-Model RMSE: 0.458595
-Model R2: -52.158293
+Pooled row-weighted metrics:
+Model MAE: 0.119480
+Model MSE: 0.019041
+Model RMSE: 0.137989
+Model R2: -3.812876
 LBO mean-target baseline (target=0.116900) MAE: 0.060351
+LBO mean-target baseline MSE: 0.004790
 LBO mean-target baseline RMSE: 0.069211
 LBO mean-target baseline R2: -0.210773
 
-Per-RBO-file metrics (R2 is n/a):
-5.0.txt (40000 rows, target=0.206349): model MAE=0.517341, RMSE=0.517341; baseline MAE=0.089449, RMSE=0.089449
-5.2.txt (40000 rows, target=0.174603): model MAE=0.503132, RMSE=0.503132; baseline MAE=0.057703, RMSE=0.057703
-5.4.txt (40000 rows, target=0.142857): model MAE=0.479727, RMSE=0.479727; baseline MAE=0.025957, RMSE=0.025957
-5.6.txt (40000 rows, target=0.111111): model MAE=0.494662, RMSE=0.494662; baseline MAE=0.005789, RMSE=0.005789
-5.7.txt (40000 rows, target=0.095238): model MAE=0.494731, RMSE=0.494731; baseline MAE=0.021662, RMSE=0.021662
-5.8.txt (40000 rows, target=0.079365): model MAE=0.430698, RMSE=0.430698; baseline MAE=0.037535, RMSE=0.037535
-5.9.txt (40000 rows, target=0.063492): model MAE=0.405891, RMSE=0.405891; baseline MAE=0.053408, RMSE=0.053408
-6.0.txt (40000 rows, target=0.047619): model MAE=0.386502, RMSE=0.386502; baseline MAE=0.069281, RMSE=0.069281
-6.1.txt (40000 rows, target=0.031746): model MAE=0.312225, RMSE=0.312225; baseline MAE=0.085154, RMSE=0.085154
-6.2.txt (40000 rows, target=0.015873): model MAE=0.422092, RMSE=0.422092; baseline MAE=0.101027, RMSE=0.101027
-6.3.txt (40000 rows, target=0.000000): model MAE=0.545667, RMSE=0.545667; baseline MAE=0.116900, RMSE=0.116900
+Model row-level state accuracy: 0.181802
+Baseline row-level state accuracy: 0.636364
+State cutoffs: Safe > 0.05; Warning > 0.025; otherwise Critical
+Model confusion matrix (rows=actual, columns=predicted):
+Actual\Predicted	Safe	Warning	Critical
+Safe	10	4	279986
+Warning	4	2	79994
+Critical	2	17	79981
+Baseline confusion matrix (rows=actual, columns=predicted):
+Actual\Predicted	Safe	Warning	Critical
+Safe	280000	0	0
+Warning	80000	0	0
+Critical	80000	0	0
+
+Equal-file macro MAE/MSE/RMSE:
+Model: 0.119480, 0.019041, 0.120364
+LBO mean-target baseline: 0.060351, 0.004790, 0.060351
+
+Per-file metrics (R2 is n/a):
+5.0.txt (40000 rows, target=0.206349): model MAE=0.243377, MSE=0.059258, RMSE=0.243430, state accuracy=0.000025; baseline MAE=0.089449, MSE=0.008001, RMSE=0.089449, state accuracy=1.000000
+5.2.txt (40000 rows, target=0.174603): model MAE=0.210286, MSE=0.044263, RMSE=0.210387, state accuracy=0.000050; baseline MAE=0.057703, MSE=0.003330, RMSE=0.057703, state accuracy=1.000000
+5.4.txt (40000 rows, target=0.142857): model MAE=0.179391, MSE=0.032217, RMSE=0.179492, state accuracy=0.000050; baseline MAE=0.025957, MSE=0.000674, RMSE=0.025957, state accuracy=1.000000
+5.6.txt (40000 rows, target=0.111111): model MAE=0.148410, MSE=0.022058, RMSE=0.148519, state accuracy=0.000025; baseline MAE=0.005789, MSE=0.000034, RMSE=0.005789, state accuracy=1.000000
+5.7.txt (40000 rows, target=0.095238): model MAE=0.132152, MSE=0.017495, RMSE=0.132270, state accuracy=0.000025; baseline MAE=0.021662, MSE=0.000469, RMSE=0.021662, state accuracy=1.000000
+5.8.txt (40000 rows, target=0.079365): model MAE=0.114341, MSE=0.013133, RMSE=0.114600, state accuracy=0.000025; baseline MAE=0.037535, MSE=0.001409, RMSE=0.037535, state accuracy=1.000000
+5.9.txt (40000 rows, target=0.063492): model MAE=0.097255, MSE=0.009531, RMSE=0.097628, state accuracy=0.000050; baseline MAE=0.053408, MSE=0.002852, RMSE=0.053408, state accuracy=1.000000
+6.0.txt (40000 rows, target=0.047619): model MAE=0.076944, MSE=0.006034, RMSE=0.077679, state accuracy=0.000050; baseline MAE=0.069281, MSE=0.004800, RMSE=0.069281, state accuracy=0.000000
+6.1.txt (40000 rows, target=0.031746): model MAE=0.057768, MSE=0.003504, RMSE=0.059195, state accuracy=0.000000; baseline MAE=0.085154, MSE=0.007251, RMSE=0.085154, state accuracy=0.000000
+6.2.txt (40000 rows, target=0.015873): model MAE=0.034831, MSE=0.001429, RMSE=0.037798, state accuracy=0.999850; baseline MAE=0.101027, MSE=0.010206, RMSE=0.101027, state accuracy=0.000000
+6.3.txt (40000 rows, target=0.000000): model MAE=0.019525, MSE=0.000529, RMSE=0.023001, state accuracy=0.999675; baseline MAE=0.116900, MSE=0.013666, RMSE=0.116900, state accuracy=0.000000

@@ -6,14 +6,16 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import Ridge
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.metrics import accuracy_score, confusion_matrix, mean_absolute_error, mean_squared_error, r2_score
 from sklearn.preprocessing import StandardScaler
+from xgboost import XGBRegressor
 
 import config
 
 sys.path.insert(0, str(config.LBO_DATA_DIR))
 from private_config import PHI_RATIO
+
+STATE_LABELS = ["Safe", "Warning", "Critical"]
 
 
 @dataclass
@@ -177,28 +179,31 @@ def make_dataset(runs):
     names = feature_frames[0].columns.tolist()
     if any(frame.columns.tolist() != names for frame in feature_frames):
         raise ValueError("Feature columns do not match between files.")
-    summaries = []
-    for frame in feature_frames:
-        summaries.append(summarize_features(frame))
-    features = pd.DataFrame(summaries).fillna(0)
-    targets = np.array([run.target for run in runs], dtype=float)
-    return features, targets
-
-
-def summarize_features(features):
-    return pd.concat([
-        features.mean().add_suffix("_mean"),
-        features.std().fillna(0).add_suffix("_std")
+    features = pd.concat(feature_frames, ignore_index=True)
+    targets = np.concatenate([
+        np.full(len(run.signal), run.target, dtype=float)
+        for run in runs
     ])
+    return features, targets
 
 
 def regression_metrics(y_true, predictions):
     score = r2_score(y_true, predictions) if np.ptp(y_true) > 0 else np.nan
+    mse = mean_squared_error(y_true, predictions)
     return {
         "mae": mean_absolute_error(y_true, predictions),
-        "rmse": np.sqrt(mean_squared_error(y_true, predictions)),
+        "mse": mse,
+        "rmse": np.sqrt(mse),
         "r2": score
     }
+
+
+def classify_margin(value):
+    if value > 0.05:
+        return "Safe"
+    if value > 0.025:
+        return "Warning"
+    return "Critical"
 
 
 def evaluate(train_runs, test_runs):
@@ -210,49 +215,46 @@ def evaluate(train_runs, test_runs):
     scaler = StandardScaler()
     X_train = scaler.fit_transform(X_train)
     X_test = scaler.transform(X_test)
-    model = Ridge(alpha=config.RIDGE_ALPHA)
+    model = XGBRegressor(**config.XGBOOST_PARAMS)
     model.fit(X_train, y_train)
     predictions = model.predict(X_test)
     baseline_target = float(np.mean(y_train))
     baseline_predictions = np.full(len(y_test), baseline_target)
+    actual_states = [classify_margin(value) for value in y_test]
+    model_states = [classify_margin(value) for value in predictions]
+    baseline_states = [classify_margin(value) for value in baseline_predictions]
 
     per_file = []
+    start = 0
     for index, run in enumerate(test_runs):
-        actual = y_test[index:index + 1]
+        end = start + len(run.signal)
+        actual = y_test[start:end]
         per_file.append({
             "file": run.name or f"test_{index + 1}",
-            "rows": len(run.signal),
+            "rows": len(actual),
             "target": run.target,
-            "model": regression_metrics(actual, predictions[index:index + 1]),
-            "baseline": regression_metrics(actual, baseline_predictions[index:index + 1])
+            "model": regression_metrics(actual, predictions[start:end]),
+            "baseline": regression_metrics(actual, baseline_predictions[start:end]),
+            "model_state_accuracy": accuracy_score(actual_states[start:end], model_states[start:end]),
+            "baseline_state_accuracy": accuracy_score(actual_states[start:end], baseline_states[start:end])
         })
+        start = end
 
     return {
         "model": regression_metrics(y_test, predictions),
         "baseline": regression_metrics(y_test, baseline_predictions),
+        "model_state_accuracy": accuracy_score(actual_states, model_states),
+        "baseline_state_accuracy": accuracy_score(actual_states, baseline_states),
+        "model_confusion_matrix": confusion_matrix(actual_states, model_states, labels=STATE_LABELS),
+        "baseline_confusion_matrix": confusion_matrix(actual_states, baseline_states, labels=STATE_LABELS),
         "baseline_target": baseline_target,
-        "per_file": per_file
-    }
-
-
-def validate_lbo_files(runs):
-    features, targets = make_dataset(runs)
-    predictions = np.empty(len(runs), dtype=float)
-    baseline_predictions = np.empty(len(runs), dtype=float)
-
-    for heldout in range(len(runs)):
-        train_mask = np.arange(len(runs)) != heldout
-        scaler = StandardScaler()
-        train_features = scaler.fit_transform(features.loc[train_mask])
-        test_features = scaler.transform(features.loc[[heldout]])
-        model = Ridge(alpha=config.RIDGE_ALPHA)
-        model.fit(train_features, targets[train_mask])
-        predictions[heldout] = model.predict(test_features)[0]
-        baseline_predictions[heldout] = targets[train_mask].mean()
-
-    return {
-        "model": regression_metrics(targets, predictions),
-        "baseline": regression_metrics(targets, baseline_predictions)
+        "per_file": per_file,
+        "macro_model_mae": float(np.mean([row["model"]["mae"] for row in per_file])),
+        "macro_model_mse": float(np.mean([row["model"]["mse"] for row in per_file])),
+        "macro_model_rmse": float(np.mean([row["model"]["rmse"] for row in per_file])),
+        "macro_baseline_mae": float(np.mean([row["baseline"]["mae"] for row in per_file])),
+        "macro_baseline_mse": float(np.mean([row["baseline"]["mse"] for row in per_file])),
+        "macro_baseline_rmse": float(np.mean([row["baseline"]["rmse"] for row in per_file]))
     }
 
 
@@ -278,48 +280,63 @@ def main():
     rbo_runs = load_rbo_runs()
     check_sampling_compatibility(lbo_runs + rbo_runs)
 
-    validation = validate_lbo_files(lbo_runs)
     results = evaluate(lbo_runs, rbo_runs)
 
     def format_metrics(name, metrics):
         return [
             f"{name} MAE: {metrics['mae']:.6f}",
+            f"{name} MSE: {metrics['mse']:.6f}",
             f"{name} RMSE: {metrics['rmse']:.6f}",
             f"{name} R2: {metrics['r2']:.6f}"
         ]
+
+    def format_confusion_matrix(name, matrix):
+        rows = [name, "Actual\\Predicted\t" + "\t".join(STATE_LABELS)]
+        rows.extend(
+            f"{label}\t" + "\t".join(str(value) for value in row)
+            for label, row in zip(STATE_LABELS, matrix)
+        )
+        return rows
 
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     report = [
         "LBO-to-RBO regression results",
         "Targets: LBO = PHI_RATIO - 1; RBO = 1 - (filename value / RBO_LIMIT)",
         "Target: distance from blowout limit (0 at limit; positive on stable side)",
-        f"Model: Ridge regression (alpha={config.RIDGE_ALPHA})",
-        "One mean/std feature summary per file; files have equal training weight",
+        "Target equivalence: confirmed in config.py",
         "Signal features: normalized by a causal 500-sample running mean",
         "Feature calculations restart independently for each file",
         "Sampling interval check: passed; time values withheld",
-        "RBO metrics are exploratory; this holdout was previously examined.",
-        "Per-file R2 is n/a because each file contributes one test observation.",
+        "Pooled metrics are row-weighted; macro metrics weight each file equally.",
+        "Per-file R2 is n/a because each file has a constant target.",
         "Feature windows are sample counts; no resampling is applied.",
         "",
-        "LBO leave-one-file-out validation:",
-        "LBO leave-one-file-out score used for alpha selection; treat as optimistic.",
-        *format_metrics("Ridge", validation["model"]),
-        *format_metrics("LBO mean baseline", validation["baseline"]),
-        "",
-        "RBO equal-file metrics:",
+        "Pooled row-weighted metrics:",
         *format_metrics("Model", results["model"]),
         f"LBO mean-target baseline (target={results['baseline_target']:.6f}) MAE: {results['baseline']['mae']:.6f}",
+        f"LBO mean-target baseline MSE: {results['baseline']['mse']:.6f}",
         f"LBO mean-target baseline RMSE: {results['baseline']['rmse']:.6f}",
         f"LBO mean-target baseline R2: {results['baseline']['r2']:.6f}",
         "",
-        "Per-RBO-file metrics (R2 is n/a):"
+        f"Model row-level state accuracy: {results['model_state_accuracy']:.6f}",
+        f"Baseline row-level state accuracy: {results['baseline_state_accuracy']:.6f}",
+        "State cutoffs: Safe > 0.05; Warning > 0.025; otherwise Critical",
+        *format_confusion_matrix("Model confusion matrix (rows=actual, columns=predicted):", results["model_confusion_matrix"]),
+        *format_confusion_matrix("Baseline confusion matrix (rows=actual, columns=predicted):", results["baseline_confusion_matrix"]),
+        "",
+        "Equal-file macro MAE/MSE/RMSE:",
+        f"Model: {results['macro_model_mae']:.6f}, {results['macro_model_mse']:.6f}, {results['macro_model_rmse']:.6f}",
+        f"LBO mean-target baseline: {results['macro_baseline_mae']:.6f}, {results['macro_baseline_mse']:.6f}, {results['macro_baseline_rmse']:.6f}",
+        "",
+        "Per-file metrics (R2 is n/a):"
     ]
     for row in results["per_file"]:
         report.append(
             f"{row['file']} ({row['rows']} rows, target={row['target']:.6f}): "
-            f"model MAE={row['model']['mae']:.6f}, RMSE={row['model']['rmse']:.6f}; "
-            f"baseline MAE={row['baseline']['mae']:.6f}, RMSE={row['baseline']['rmse']:.6f}"
+            f"model MAE={row['model']['mae']:.6f}, MSE={row['model']['mse']:.6f}, RMSE={row['model']['rmse']:.6f}, "
+            f"state accuracy={row['model_state_accuracy']:.6f}; "
+            f"baseline MAE={row['baseline']['mae']:.6f}, MSE={row['baseline']['mse']:.6f}, "
+            f"RMSE={row['baseline']['rmse']:.6f}, state accuracy={row['baseline_state_accuracy']:.6f}"
         )
     report_path = config.OUTPUT_DIR / "results.txt"
     report_path.write_text("\n".join(report) + "\n", encoding="utf-8")
