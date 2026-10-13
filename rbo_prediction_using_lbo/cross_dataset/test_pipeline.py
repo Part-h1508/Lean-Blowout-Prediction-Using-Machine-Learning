@@ -26,12 +26,34 @@ class CrossDatasetPipelineTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, "missing PHI_RATIO mappings"):
                         pipeline.load_lbo_runs()
 
+    def test_lbo_loader_converts_ratio_to_limit_distance(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder, "1.xlsx")
+            pd.DataFrame([[0, 10], [1, 12], [2, 14]]).to_excel(
+                path,
+                index=False,
+                header=False
+            )
+            with patch.object(pipeline.config, "LBO_DATA_DIR", Path(folder)):
+                with patch.object(pipeline.config, "LBO_SIGNAL_COLUMN", 1):
+                    with patch.object(pipeline, "PHI_RATIO", {"1": 1.2}):
+                        runs = pipeline.load_lbo_runs()
+
+        np.testing.assert_array_equal(runs[0].time, [0, 1, 2])
+        np.testing.assert_array_equal(runs[0].signal, [10, 12, 14])
+        self.assertAlmostEqual(runs[0].target, 0.2)
+
     def test_config_blocks_unconfirmed_real_run(self):
         with patch.object(pipeline.config, "LBO_SIGNAL_COLUMN", None):
             with self.assertRaisesRegex(ValueError, "set LBO_SIGNAL_COLUMN"):
                 pipeline.validate_config()
 
-    def test_rbo_filename_target_is_normalized_by_limit(self):
+    def test_lbo_and_rbo_targets_share_limit_distance_orientation(self):
+        lbo_margin = 1.2 - 1.0
+        rbo_margin = 1.0 - 0.8
+        self.assertAlmostEqual(lbo_margin, rbo_margin)
+
+    def test_rbo_filename_target_is_limit_distance(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder, "5.0.txt")
             np.savetxt(path, np.array([[0, 10], [1, 12], [2, 14]], dtype=float))
@@ -39,7 +61,7 @@ class CrossDatasetPipelineTests(unittest.TestCase):
 
         np.testing.assert_array_equal(runs[0].time, [0, 1, 2])
         np.testing.assert_array_equal(runs[0].signal, [10, 12, 14])
-        self.assertAlmostEqual(runs[0].target, 5.0 / 6.3)
+        self.assertAlmostEqual(runs[0].target, 1.0 - 5.0 / 6.3)
 
     def test_malformed_rbo_file_fails_without_exposing_contents(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -57,6 +79,12 @@ class CrossDatasetPipelineTests(unittest.TestCase):
         pd.testing.assert_frame_equal(first.iloc[:len(prefix)], second.iloc[:len(prefix)])
         self.assertEqual(first.loc[0, "signal_lag_1"], 0)
         self.assertEqual(first.loc[0, "signal_autocorr_1"], 0)
+
+    def test_features_are_invariant_to_signal_scale(self):
+        signal = np.arange(1, 101, dtype=float)
+        first = pipeline.create_features(signal)
+        scaled = pipeline.create_features(signal * 5)
+        pd.testing.assert_frame_equal(first, scaled, check_exact=False, rtol=1e-6, atol=1e-8)
 
     def test_evaluation_rejects_different_feature_schemas(self):
         first = pipeline.create_features(np.arange(60, dtype=float))

@@ -43,7 +43,7 @@ def load_lbo_runs():
         runs.append(Run(
             time=data.iloc[:, 0].to_numpy(dtype=float),
             signal=data.iloc[:, 1].to_numpy(dtype=float),
-            target=targets[path.stem]
+            target=targets[path.stem] - 1.0
         ))
     return runs
 
@@ -101,7 +101,7 @@ def load_rbo_runs(data_dir=None):
         runs.append(Run(
             time=data[:, 0],
             signal=data[:, 1],
-            target=float(path.stem) / config.RBO_LIMIT
+            target=1.0 - float(path.stem) / config.RBO_LIMIT
         ))
     return runs
 
@@ -135,7 +135,10 @@ def check_sampling_compatibility(runs):
 
 
 def create_features(signal):
-    data = pd.DataFrame({"signal": signal})
+    signal = pd.Series(signal, dtype=float)
+    scale = signal.rolling(window=500, min_periods=1).mean().abs()
+    relative_signal = signal / (scale + 1e-8)
+    data = pd.DataFrame({"signal": relative_signal})
     features = data.copy()
 
     for window in config.ROLLING_WINDOWS:
@@ -217,7 +220,9 @@ def main():
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     report = [
         "LBO-to-RBO regression results",
+        "Target: distance from blowout limit (0 at limit; positive on stable side)",
         "Target equivalence: confirmed in config.py",
+        "Signal features: normalized by a causal 500-sample running mean",
         "Sampling interval check: passed; time values withheld",
         "Limitations: row-pooled metrics; feature windows are sample counts; no resampling.",
         "",
