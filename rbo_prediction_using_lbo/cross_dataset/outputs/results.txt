@@ -1,0 +1,9 @@
+LBO-to-RBO regression results
+Target equivalence: confirmed in config.py
+Sampling interval check: passed; time values withheld
+Limitations: row-pooled metrics; feature windows are sample counts; no resampling.
+
+Train LBO, test RBO:
+MAE: 0.352133
+RMSE: 0.368745
+R2: -33.368845
