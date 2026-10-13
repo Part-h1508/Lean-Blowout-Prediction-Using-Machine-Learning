@@ -61,11 +61,11 @@ def load_data():
         sensor_files = []
         for f in all_files:
             try:
-                # Try to parse filename as number (e.g., "65.xlsx" -> 65)
+                # Try to parse filename as number (e.g., "25.xlsx" -> 25)
                 float(f.replace('.xlsx', ''))
                 sensor_files.append(f)
             except ValueError:
-                # Skip non-numeric files (like "Data details.xlsx")
+                # Skip non-numeric files 
                 continue
         
         sensor_files.sort(key=lambda x: float(x.replace('.xlsx', '')))
