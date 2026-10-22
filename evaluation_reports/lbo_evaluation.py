@@ -1,5 +1,6 @@
 """Reproduce the original LBO leave-one-file-out evaluation."""
 
+import importlib.util
 import sys
 import unittest
 from pathlib import Path
@@ -16,8 +17,6 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 LBO_DIR = ROOT_DIR / "lbo_prediction"
 DATA_DIR = LBO_DIR / "data"
 OUTPUT_DIR = Path(__file__).resolve().parent
-sys.path.insert(0, str(DATA_DIR))
-from private_config import PHI_RATIO
 
 
 XGBOOST_PARAMS = {
@@ -40,9 +39,22 @@ def is_numeric(value):
         return False
 
 
+def load_target_mapping():
+    target_path = DATA_DIR / "private_config.py"
+    spec = importlib.util.spec_from_file_location("_lbo_private_config", target_path)
+    if spec is None or spec.loader is None:
+        raise FileNotFoundError("Could not load the existing LBO target configuration.")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    targets = getattr(module, "PHI_RATIO", None)
+    if not isinstance(targets, dict):
+        raise ValueError("The existing LBO private_config.py has no PHI_RATIO mapping.")
+    return targets
+
+
 def load_data(data_dir=None, target_mapping=None):
     data_dir = DATA_DIR if data_dir is None else Path(data_dir)
-    target_mapping = PHI_RATIO if target_mapping is None else target_mapping
+    target_mapping = load_target_mapping() if target_mapping is None else target_mapping
     targets = {str(key).strip(): float(value) for key, value in target_mapping.items()}
     files = {
         path.stem: path
@@ -62,11 +74,16 @@ def load_data(data_dir=None, target_mapping=None):
         raise FileNotFoundError("No numeric-named LBO Excel files found.")
 
     frames = []
+    expected_columns = None
     for name, path in sorted(files.items(), key=lambda item: float(item[0])):
         try:
             frame = pd.read_excel(path, header=None)
         except (OSError, ValueError, ImportError) as error:
             raise ValueError(f"Could not read LBO workbook {path.name}.") from error
+        if expected_columns is None:
+            expected_columns = frame.shape[1]
+        elif frame.shape[1] != expected_columns:
+            raise ValueError(f"{path.name} has a different number of columns than other LBO files.")
         frame["source_file"] = name
         frames.append(frame)
 
@@ -225,6 +242,15 @@ class SyntheticTests(unittest.TestCase):
             pd.DataFrame([[0, 1], [1, 2]]).to_excel(Path(folder) / "65.xlsx", header=False, index=False)
             with self.assertRaisesRegex(ValueError, "lack PHI_RATIO mappings"):
                 load_data(folder, {"66": 1.0})
+
+    def test_inconsistent_workbook_schema_fails(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as folder:
+            pd.DataFrame([[0, 1], [1, 2]]).to_excel(Path(folder) / "65.xlsx", header=False, index=False)
+            pd.DataFrame([[0, 1, 2], [1, 2, 3]]).to_excel(Path(folder) / "66.xlsx", header=False, index=False)
+            with self.assertRaisesRegex(ValueError, "different number of columns"):
+                load_data(folder, {"65": 1.0, "66": 1.1})
 
     def test_metrics_and_confusion_matrix_on_synthetic_splits(self):
         source = pd.Series(["65"] * 60 + ["70"] * 60)

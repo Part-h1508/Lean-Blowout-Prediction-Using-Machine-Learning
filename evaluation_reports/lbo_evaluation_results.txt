@@ -1,0 +1,24 @@
+Original LBO leave-one-file-out evaluation
+Target: PHI_RATIO; states use the original 1.05 and 1.025 cutoffs.
+Method: features computed over concatenated files, then one file held out per fold.
+The original bfill policy is retained for reproducibility.
+
+File	Actual target	Predicted target	Actual state	Predicted state	MAE	Percent error
+65	1.384600	1.285693	Safe	Safe	0.098907	7.1434%
+70	1.285700	1.227997	Safe	Safe	0.058968	4.4881%
+75	1.200000	1.252064	Safe	Safe	0.053884	4.3387%
+80	1.125000	1.063276	Safe	Safe	0.062083	5.4866%
+85	1.058800	1.063920	Safe	Safe	0.020823	0.4836%
+86	1.046500	1.045164	Warning	Warning	0.010857	0.1277%
+87	1.034500	1.030142	Warning	Warning	0.005141	0.4213%
+88	1.022700	1.023358	Critical	Critical	0.002419	0.0643%
+89	1.011200	1.004071	Critical	Critical	0.007372	0.7050%
+90	1.000000	1.010996	Critical	Critical	0.010996	1.0996%
+
+Average MAE: 0.033145
+Average percent error: 2.4358%
+Confusion matrix (rows=actual, columns=predicted):
+Actual\Predicted	Safe	Warning	Critical
+Safe	5	0	0
+Warning	0	2	0
+Critical	0	0	3

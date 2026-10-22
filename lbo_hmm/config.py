@@ -3,6 +3,13 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT_DIR / "lbo_prediction" / "data"
 OUTPUT_DIR = Path(__file__).resolve().parent / "outputs"
+FORECAST_DATA_DIRS = {
+	"TAI": ROOT_DIR / "TAI",
+	"RBO": ROOT_DIR / "rbo_prediction_using_lbo" / "data" / "RBO",
+	"LBO": DATA_DIR,
+}
+FORECAST_OUTPUT_DIR = OUTPUT_DIR / "forecasting"
+FORECAST_RESULTS_DIR = Path(__file__).resolve().parent / "results"
 
 TIME_COLUMN = 0
 SIGNAL_COLUMN = 1
@@ -12,3 +19,12 @@ RANDOM_STATE = 42
 SAMPLING_TOLERANCE = 0.05
 MAX_ACF_LAG = 500
 PSD_SEGMENT_LENGTH = 1024
+
+FORECAST_HORIZON = 10
+FORECAST_TRAIN_FRACTION = 0.8
+FORECAST_N_STATES = 3
+FORECAST_N_ITERATIONS = 20
+FORECAST_MAX_FIT_SAMPLES = 120_000
+FORECAST_CHUNK_LENGTH = 10_000
+FORECAST_ORIGIN_STRIDE = FORECAST_HORIZON
+FORECAST_MIN_TRAIN_ROWS = 100

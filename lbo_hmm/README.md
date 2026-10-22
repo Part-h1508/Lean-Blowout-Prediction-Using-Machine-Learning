@@ -37,3 +37,17 @@ python .\lbo_hmm\evaluation.py
 ```
 
 Metrics are diagnostics, not proof that samples faithfully replicate the physical process. One held-out file per fold limits leakage but cannot establish generalization beyond the available operating conditions.
+
+## Time-series forecasting
+
+`forecasting.py` is a separate baseline that fits one Gaussian HMM per measurement run on first differences. It uses a chronological 80/20 split, a 10-sample forecast horizon, causal state filtering, and a persistence baseline. The held-out region is used only for causal forecast origins and scoring; independent files are never concatenated.
+
+The default input folders are configured in `config.py`: LBO workbooks in `lbo_prediction/data`, RBO text files in `rbo_prediction_using_lbo/data/RBO`, and TAI workbooks in `TAI` at the workspace root. TAI files are treated as single-column signals in row order; no timestamps are invented. Change `FORECAST_DATA_DIRS` there if your TAI folder is elsewhere. Missing family folders are reported and skipped.
+
+Run the forecast workflow with:
+
+```powershell
+python .\lbo_hmm\forecasting.py
+```
+
+Audit data, metrics, comparable 10-step prediction rows, and fitted models are written under `lbo_hmm/outputs/forecasting/`. Example forecast time-series plots are saved under `lbo_hmm/results/` as `<FAMILY>_timeseries.png`. Each plot shows one run from that family with its actual held-out signal and HMM/persistence forecast targets; absent input families are skipped. The default uses three hidden states and evenly spaced contiguous training segments for runs longer than the configured fit-sample limit. State-count tuning should use training-only validation rather than these held-out scores.
