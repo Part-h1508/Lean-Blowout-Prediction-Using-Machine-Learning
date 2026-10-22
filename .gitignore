@@ -28,3 +28,6 @@ lbo_prediction/final_results/actual_vs_predicted.png
 
 # Private experimental parameters
 lbo_prediction/data/private_config.py
+
+# Private model reports and sensitive result summaries
+reports_private/
