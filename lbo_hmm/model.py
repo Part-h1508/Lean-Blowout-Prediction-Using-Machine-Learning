@@ -115,6 +115,8 @@ def generate_sequence(model, length, mean, scale, random_state=None):
 
 def autocorrelation(values, max_lag=None):
     values = np.asarray(values, dtype=float)
+    if values.size == 0:
+        return np.zeros(0)
     centered = values - np.mean(values)
     limit = min(config.MAX_ACF_LAG if max_lag is None else max_lag, len(values) - 1)
     if limit <= 0:

@@ -97,6 +97,9 @@ class HMMTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "missing-time gap"):
             model.check_sampling([sequence])
 
+    def test_autocorrelation_handles_empty_input(self):
+        np.testing.assert_array_equal(model.autocorrelation([]), [])
+
     def test_standardizer_uses_only_training_sequences(self):
         train = [model.Sequence("train", np.arange(3), np.array([1.0, 2.0, 3.0]))]
         test = model.Sequence("test", np.arange(3), np.array([100.0, 200.0, 300.0]))
