@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 import evaluation
+import generate_phi_timeseries
 import model
 import forecasting
 
@@ -152,6 +153,59 @@ class HMMTests(unittest.TestCase):
 
         self.assertEqual(generated.shape, (500,))
         self.assertTrue(np.isfinite(generated).all())
+
+    def test_phi_conditions_use_metadata_and_selected_workbooks(self):
+        sequences = [
+            model.Sequence("65.xlsx", np.arange(4), np.arange(4, dtype=float)),
+            model.Sequence("80.xlsx", np.arange(4), np.arange(4, dtype=float) + 10),
+            model.Sequence("90.xlsx", np.arange(4), np.arange(4, dtype=float) + 20),
+        ]
+        metadata = pd.DataFrame({
+            "Air (SLPM)": [65, 80, 90],
+            "Equivalence ratio": [1.065, 0.865, 0.769],
+        })
+
+        with patch.object(generate_phi_timeseries.pd, "read_excel", return_value=metadata):
+            conditions = generate_phi_timeseries.select_phi_conditions(
+                sequences, Path("metadata.xlsx")
+            )
+
+        self.assertEqual([flow for flow, _, _ in conditions], [90, 80, 65])
+        np.testing.assert_allclose(
+            [phi for _, phi, _ in conditions], [0.769, 0.865, 1.065]
+        )
+        self.assertEqual(
+            [sequence.name for _, _, sequence in conditions],
+            ["90.xlsx", "80.xlsx", "65.xlsx"],
+        )
+
+    def test_phi_signal_generation_preserves_full_source_duration(self):
+        conditions = [
+            (
+                flow,
+                phi,
+                model.Sequence(
+                    f"{flow}.xlsx",
+                    np.arange(4, dtype=float) * 0.5,
+                    np.arange(4, dtype=float),
+                ),
+            )
+            for flow, phi in [(90, 0.769), (80, 0.865), (65, 1.065)]
+        ]
+        with patch.object(
+            generate_phi_timeseries, "fit_standardizer", return_value=(0.0, 1.0)
+        ), patch.object(generate_phi_timeseries, "fit_hmm", return_value=object()), patch.object(
+            generate_phi_timeseries,
+            "generate_sequence",
+            side_effect=[np.arange(4, dtype=float)] * 3,
+        ):
+            generated = generate_phi_timeseries.generate_condition_signals(conditions)
+
+        self.assertEqual(len(generated), 3)
+        for (_, time_s, signal), (_, _, source) in zip(generated, conditions):
+            np.testing.assert_array_equal(time_s, source.time - source.time[0])
+            self.assertEqual(len(signal), len(source.signal))
+        self.assertEqual(generated[0][1][-1], 1.5)
 
 
 if __name__ == "__main__":

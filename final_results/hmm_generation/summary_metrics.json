@@ -1,0 +1,20 @@
+{
+  "model": "four-state univariate Gaussian HMM",
+  "evaluation": "leave one complete LBO workbook out",
+  "n_files": 10,
+  "n_rows_compared": 400000,
+  "all_folds_converged": true,
+  "mean_metrics_across_files": {
+    "mean_absolute_difference": 1.0444309744544997,
+    "variance_absolute_difference": 0.9788367402534162,
+    "acf_mae": 0.4729809853643073,
+    "normalized_psd_l1": 1.0047597395279215,
+    "wasserstein_distance": 1.1220774544722851,
+    "ks_statistic": 0.64487,
+    "ks_pvalue": 0.0
+  },
+  "states": 4,
+  "iterations": 100,
+  "seed": 42,
+  "note": "Metrics compare generated sequences against held-out workbooks. They are descriptive diagnostics, not evidence that the generator reproduces the physical process."
+}

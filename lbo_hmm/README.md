@@ -51,3 +51,24 @@ python .\lbo_hmm\forecasting.py
 ```
 
 Audit data, metrics, comparable 10-step prediction rows, and fitted models are written under `lbo_hmm/outputs/forecasting/`. Example forecast time-series plots are saved under `lbo_hmm/results/` as `<FAMILY>_timeseries.png`. Each plot shows one run from that family with its actual held-out signal and HMM/persistence forecast targets; absent input families are skipped. The default uses three hidden states and evenly spaced contiguous training segments for runs longer than the configured fit-sample limit. State-count tuning should use training-only validation rather than these held-out scores.
+
+## HMM-generated time series by equivalence ratio
+
+To generate a three-panel figure for the stable (90 SLPM), intermediate
+(80 SLPM), and near-blowout (65 SLPM) LBO conditions, run:
+
+```powershell
+python .\lbo_hmm\generate_phi_timeseries.py
+```
+
+The script reads the equivalence ratios from `Data details.xlsx` in
+`lbo_prediction/data/`, fits a separate Gaussian HMM to each condition's full signal,
+and samples a synthetic signal with the same number of rows as its source
+workbook. It saves `lbo_hmm/results/LBO_phi_generated_timeseries.png` by
+default. The time axis uses the source workbook timestamps, shifted to start at
+zero. Override paths with `--data-dir`, `--metadata`, or `--output`.
+
+These are model-generated signals, not measured traces. A Gaussian HMM is a
+baseline and may not reproduce the observed intermittency near blowout; assess
+the generated signals against held-out data before interpreting them as a
+physical simulation.

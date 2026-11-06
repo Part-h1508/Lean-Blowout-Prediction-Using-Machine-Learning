@@ -1,0 +1,7 @@
+# These outputs contain traces or predictions derived from confidential measurements.
+/xgboost/predictions_by_sample.csv
+/xgboost/*.png
+/hmm_generation/generated_vs_actual_by_file.csv
+/hmm_generation/*.png
+/hmm_forecasting/*.csv
+/hmm_forecasting/plots/*.png

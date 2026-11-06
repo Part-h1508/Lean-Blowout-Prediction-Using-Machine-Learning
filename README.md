@@ -48,6 +48,16 @@ Warning:
 Critical:
 3/3
 
+These are previously reported results. The separate [final results package](./final_results/README.md)
+contains leave-one-workbook-out XGBoost results, held-out HMM signal-generation diagnostics,
+and within-run HMM forecasting metrics. Its evaluation protocols and metrics are reported
+separately and should not be treated as directly interchangeable with the historical figures
+above. The LBO-trained/RBO-tested cross-dataset workflow is intentionally excluded.
+
+The experimental measurements are confidential. Review the local-only output rules in
+[final_results/.gitignore](./final_results/.gitignore) before sharing generated plots or
+sample-level outputs.
+
 ## Important Files
 
 pipeline_regression.py

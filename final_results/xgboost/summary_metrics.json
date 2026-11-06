@@ -1,0 +1,22 @@
+{
+  "model": "XGBoost regressor",
+  "evaluation": "leave one complete operating-condition workbook out",
+  "n_files": 10,
+  "n_predictions": 400000,
+  "file_mean_mae": 0.032637511844635016,
+  "file_mean_rmse": 0.04531562379233171,
+  "mean_file_percent_error": 2.6931875248770707,
+  "pooled_sample_mae": 0.0386609048500352,
+  "pooled_sample_rmse": 0.05183095542075635,
+  "feature_count": 15,
+  "parameters": {
+    "n_estimators": 200,
+    "max_depth": 6,
+    "learning_rate": 0.1,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "random_state": 42,
+    "objective": "reg:squarederror"
+  },
+  "note": "Primary MAE/RMSE compare one mean prediction per held-out operating condition. Pooled sample metrics are also reported but rows within a workbook are correlated. Features are engineered within each workbook; the scaler is fitted only on training files."
+}
