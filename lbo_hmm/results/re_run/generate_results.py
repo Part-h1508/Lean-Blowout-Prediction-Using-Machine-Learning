@@ -1,7 +1,6 @@
-import json
-import pickle
-import sys
 import importlib.util
+import json
+import sys
 from pathlib import Path
 
 import matplotlib
@@ -11,7 +10,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.preprocessing import StandardScaler
+from xgboost import XGBRegressor
 
 
 RESULTS_DIR = Path(__file__).resolve().parent
@@ -35,31 +36,16 @@ import forecasting
 from private_config import PHI_RATIO
 
 
-def build_xgb_features():
-    frames = []
-    for path in sorted(
-        XGB_DATA_DIR.glob("*.xlsx"),
-        key=lambda item: float(item.stem) if item.stem.replace(".", "", 1).isdigit() else float("inf"),
-    ):
-        try:
-            float(path.stem)
-        except ValueError:
-            continue
-        frame = pd.read_excel(path, header=None)
-        frame["source_file"] = path.stem
-        frames.append(frame)
-    if not frames:
-        raise FileNotFoundError(f"No numeric-named workbooks found in {XGB_DATA_DIR}.")
-
-    data = pd.concat(frames, ignore_index=True)
+def features_for_workbook(path):
+    data = pd.read_excel(path, header=None)
     data = data.drop(columns=[column for column in xgb_config.COLS_TO_DROP if column in data])
     if xgb_config.TIME_COL in data.columns:
         data = data.drop(columns=[xgb_config.TIME_COL])
     data = data.dropna().apply(pd.to_numeric, errors="coerce").dropna()
-    source_files = data["source_file"].astype(str).str.strip()
-    data = data.drop(columns=["source_file"])
-    features = data.copy()
+    if data.empty:
+        raise ValueError(f"{path.name} has no usable numeric sensor rows.")
 
+    features = data.copy()
     for window in (50, 100, 500):
         for column in data.columns:
             features[f"{column}_roll_mean_{window}"] = data[column].rolling(
@@ -90,49 +76,67 @@ def build_xgb_features():
         features[f"{column}_psd_proxy"] = (
             data[column].rolling(window=500, min_periods=1).std() ** 2
         )
-
     features = features.bfill().ffill().fillna(0)
     features.columns = features.columns.astype(str)
-    return features, source_files
+    return features.reset_index(drop=True)
 
 
-def evaluate_saved_xgb(output_dir):
-    models_dir = LBO_DIR / "outputs" / "models"
-    with (models_dir / "lbo_model.pkl").open("rb") as stream:
-        model = pickle.load(stream)
-    with (models_dir / "scaler.pkl").open("rb") as stream:
-        scaler = pickle.load(stream)
+def build_xgb_features():
+    frames = []
+    labels = []
+    for path in sorted(
+        XGB_DATA_DIR.glob("*.xlsx"),
+        key=lambda item: float(item.stem) if item.stem.replace(".", "", 1).isdigit() else float("inf"),
+    ):
+        try:
+            float(path.stem)
+        except ValueError:
+            continue
+        if path.stem not in PHI_RATIO:
+            raise KeyError(f"No Phi/Phi_LBO target is configured for {path.name}.")
+        frame = features_for_workbook(path)
+        frames.append(frame)
+        labels.extend([path.stem] * len(frame))
+    if not frames:
+        raise FileNotFoundError(f"No numeric-named workbooks found in {XGB_DATA_DIR}.")
+    return pd.concat(frames, ignore_index=True), np.asarray(labels)
 
+
+def evaluate_xgb(output_dir):
     features, source_files = build_xgb_features()
     test_file = "88"
     test_mask = source_files == test_file
     if not test_mask.any():
         raise ValueError(f"Holdout file {test_file}.xlsx is not present in the loaded data.")
-    if features.shape[1] != scaler.n_features_in_ or features.shape[1] != model.n_features_in_:
-        raise ValueError(
-            f"Feature count mismatch: generated {features.shape[1]}, "
-            f"scaler expects {scaler.n_features_in_}, model expects {model.n_features_in_}."
-        )
+    train_mask = ~test_mask
+    if set(source_files[train_mask]) & set(source_files[test_mask]):
+        raise ValueError("Training and holdout files overlap.")
 
     actual = float(PHI_RATIO[test_file])
-    predictions = model.predict(scaler.transform(features.loc[test_mask]))
+    scaler = StandardScaler()
+    x_train = scaler.fit_transform(features.loc[train_mask])
+    x_test = scaler.transform(features.loc[test_mask])
+    y_train = np.asarray([PHI_RATIO[file_name] for file_name in source_files[train_mask]])
+    model = XGBRegressor(**xgb_config.XGBOOST_PARAMS)
+    model.fit(x_train, y_train)
+    predictions = model.predict(x_test)
     metrics = {
-        "model": "saved XGBoost regressor",
+        "model": "XGBoost regressor using the project's configured parameters",
         "holdout_file": f"{test_file}.xlsx",
+        "training_files": sorted(set(source_files[train_mask]), key=float),
         "actual_phi_ratio": actual,
         "mean_predicted_phi_ratio": float(np.mean(predictions)),
         "median_predicted_phi_ratio": float(np.median(predictions)),
         "mae": float(mean_absolute_error(np.full(len(predictions), actual), predictions)),
         "rmse": float(np.sqrt(mean_squared_error(np.full(len(predictions), actual), predictions))),
-        "r2": float(r2_score(np.full(len(predictions), actual), predictions)),
         "mean_prediction_percent_error": float(
             abs(np.mean(predictions) - actual) / abs(actual) * 100
         ),
         "n_rows": int(len(predictions)),
         "note": (
-            "Inference uses the saved checkpoint. Features are reconstructed using the "
-            "original all-file preprocessing order; rolling features can include context "
-            "across file boundaries."
+            "Fresh fit using existing project parameters; features are generated separately "
+            "within each workbook, and the scaler is fitted only on training files. R2 is "
+            "omitted because this holdout has one constant target value."
         ),
     }
 
@@ -148,10 +152,10 @@ def evaluate_saved_xgb(output_dir):
 
     plt.figure(figsize=(12, 4))
     plt.axhline(actual, color="black", linestyle="--", label="Actual Phi/Phi_LBO")
-    plt.plot(predictions, linewidth=0.8, label="Saved XGBoost prediction")
+    plt.plot(predictions, linewidth=0.8, label="XGBoost prediction")
     plt.xlabel("Sample index in held-out file 88.xlsx")
     plt.ylabel("Phi/Phi_LBO")
-    plt.title("Saved XGBoost: file 88 holdout predictions")
+    plt.title("XGBoost: file 88 holdout predictions")
     plt.legend()
     plt.grid(alpha=0.25)
     plt.tight_layout()
@@ -164,7 +168,7 @@ def evaluate_saved_xgb(output_dir):
     plt.axhline(0, color="black", linestyle="--")
     plt.xlabel("Predicted Phi/Phi_LBO")
     plt.ylabel("Actual - predicted")
-    plt.title("Saved XGBoost: held-out residuals")
+    plt.title("XGBoost: held-out residuals")
     plt.grid(alpha=0.25)
     plt.tight_layout()
     plt.savefig(output_dir / "xgboost_holdout_residuals.png", dpi=160)
@@ -175,7 +179,7 @@ def evaluate_saved_xgb(output_dir):
     plt.figure(figsize=(9, 6))
     importance.plot.barh()
     plt.xlabel("Feature importance")
-    plt.title("Saved XGBoost: top 15 feature importances")
+    plt.title("XGBoost: top 15 feature importances")
     plt.tight_layout()
     plt.savefig(output_dir / "xgboost_feature_importance.png", dpi=160)
     plt.close()
@@ -183,6 +187,7 @@ def evaluate_saved_xgb(output_dir):
 
 
 def prepare_hmm_outputs(output_dir):
+    output_dir.mkdir(parents=True, exist_ok=True)
     required = (
         "metrics_overall.csv",
         "metrics_by_run.csv",
@@ -211,13 +216,18 @@ def prepare_hmm_outputs(output_dir):
     plt.close(fig)
 
     predictions = pd.read_csv(HMM_OUTPUT_DIR / "predictions_10_step.csv")
-    runs = forecasting.load_runs()
+    runs = forecasting.load_runs({
+        "TAI": REPO_DIR / "TAI",
+        "RBO": HMM_DIR / "rbo_prediction_using_lbo" / "data" / "RBO",
+        "LBO": XGB_DATA_DIR,
+    })
     forecast_plots = forecasting.plot_family_forecasts(
         runs, predictions, output_dir=metrics_plot_dir
     )
     return {
-        "source": str(HMM_OUTPUT_DIR),
+        "source": "lbo_hmm/outputs/forecasting/",
         "fresh_fit": False,
+        "metrics": overall[overall["group"].isin(["LBO", "RBO"])].to_dict("records"),
         "plots": [path.name for path in forecast_plots]
         + ["hmm_metrics_by_family.png"],
     }
@@ -268,21 +278,30 @@ def main():
     xgb_dir = actual_dir / "xgboost"
     hmm_dir = actual_dir / "hmm"
     synthetic_dir = RESULTS_DIR / "synthetic_demo"
-    xgb_metrics = evaluate_saved_xgb(xgb_dir)
+    xgb_metrics = evaluate_xgb(xgb_dir)
     hmm_info = prepare_hmm_outputs(hmm_dir)
     create_synthetic_demo(synthetic_dir)
+    hmm_table = "\n".join(
+        f"| {row['group']} | {row['model']} | {row['MAE']:.4f} | {row['RMSE']:.4f} |"
+        for row in hmm_info["metrics"]
+    )
 
     report = f"""# Model results package
 
-Generated locally from the project data and existing model artifacts.
+Generated locally from the project data and configured model workflows.
 
 ## Actual project data
 
-- **XGBoost:** inference from the saved model/scaler in `lbo_prediction/outputs/models/`, evaluated on file `88.xlsx` (the holdout selected in the pipeline source). The checkpoint was not retrained. Metrics and sample predictions are in `actual/xgboost/`.
-- **XGBoost caveat:** the feature pipeline builds rolling features across concatenated files before the file split, so boundary context can cross between runs. Treat this as a preliminary reproduction, not leakage-free validation. The older leave-one-out CSV is not used: its file labels are all `xx` and it does not contain numeric actual/predicted Phi values.
+- **XGBoost:** freshly fit with the project's configured model parameters, holding out file `88.xlsx`. Each workbook's features are computed separately and the scaler is fitted only on training files. Metrics and sample predictions are in `actual/xgboost/`.
+- The existing saved XGBoost checkpoint was not reused because its 30-feature input schema does not match the current 15-feature data pipeline.
+- The holdout is one operating file, so these results are preliminary and do not establish generalization. The older leave-one-out CSV is not used: its file labels are all `xx` and it does not contain numeric actual/predicted Phi values.
 - **HMM:** the HMM metrics and 10-step predictions in `actual/hmm/` are existing results copied from `lbo_hmm/outputs/forecasting/`; plots were regenerated from those saved results and project measurements. A fresh HMM fit was not performed because `hmmlearn` is not installed in the current Python environment.
 - XGBoost holdout summary: mean prediction percent error {xgb_metrics['mean_prediction_percent_error']:.3f}% across {xgb_metrics['n_rows']} samples; the holdout represents one operating file.
 - HMM output provenance: `{hmm_info['source']}`.
+
+| Dataset family | Model | MAE | RMSE |
+|---|---|---:|---:|
+{hmm_table}
 
 ## Synthetic demo (separate; not experimental results)
 

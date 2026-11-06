@@ -1,0 +1,8 @@
+{
+  "status": "SYNTHETIC DEMO ONLY - not experimental data or a project-model evaluation",
+  "synthetic_process": "AR(1), coefficient 0.92, Gaussian noise standard deviation 0.5",
+  "forecast": "10-step persistence baseline",
+  "mae": 1.2612813363428697,
+  "rmse": 1.5655916478583713,
+  "n_predictions": 80
+}

@@ -1,0 +1,23 @@
+{
+  "model": "XGBoost regressor using the project's configured parameters",
+  "holdout_file": "88.xlsx",
+  "training_files": [
+    "65",
+    "70",
+    "75",
+    "80",
+    "85",
+    "86",
+    "87",
+    "89",
+    "90"
+  ],
+  "actual_phi_ratio": 1.0227,
+  "mean_predicted_phi_ratio": 1.0283584594726562,
+  "median_predicted_phi_ratio": 1.0349254608154297,
+  "mae": 0.015657952059981835,
+  "rmse": 0.017027060448154965,
+  "mean_prediction_percent_error": 0.5532910823822021,
+  "n_rows": 40000,
+  "note": "Fresh fit using existing project parameters; features are generated separately within each workbook, and the scaler is fitted only on training files. R2 is omitted because this holdout has one constant target value."
+}
